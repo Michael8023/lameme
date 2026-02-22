@@ -6,16 +6,14 @@ import { usePoopStore } from "../store";
 export default function HomePage() {
   const navigate = useNavigate();
   const { records } = usePoopStore();
-  const todayCount = records.filter(
-    (r) => r.date === new Date().toISOString().split("T")[0]
-  ).length;
+  const todayCount = records.filter((r) => r.date === new Date().toISOString().split("T")[0]).length;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 via-orange-50 to-yellow-50 flex flex-col">
       <header className="pt-safe px-6 pt-8 pb-2">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-amber-900">排便检测器</h1>
-          <p className="text-amber-600 text-sm mt-1">关爱肠道，从每一次记录开始</p>
+        <div className="relative text-center">
+          <h1 className="text-2xl font-bold text-amber-900">拉了么</h1>
+          <p className="text-amber-600 text-sm mt-1">我的排便日记</p>
         </div>
       </header>
 

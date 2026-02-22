@@ -1,12 +1,13 @@
-import React from "react";
+﻿import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Calendar, DollarSign, History, Home } from "lucide-react";
+import { Calendar, DollarSign, History, Home, User } from "lucide-react";
 
 const NAV_ITEMS = [
   { icon: Home, label: "蹲坑", path: "/", color: "text-orange-600" },
   { icon: Calendar, label: "日历", path: "/calendar", color: "text-emerald-600" },
   { icon: History, label: "历史", path: "/history", color: "text-blue-600" },
   { icon: DollarSign, label: "薪酬", path: "/salary", color: "text-amber-700" },
+  { icon: User, label: "我的", path: "/me", color: "text-slate-700" },
 ];
 
 export default function BottomNav() {
@@ -16,12 +17,12 @@ export default function BottomNav() {
   return (
     <nav className="fixed left-0 right-0 bottom-0 z-40 px-4 pb-safe pb-3">
       <div className="mx-auto max-w-lg rounded-2xl border border-white/60 bg-white/90 p-2 shadow-xl backdrop-blur-md">
-        <div className="grid grid-cols-4 gap-1">
+        <div className="grid grid-cols-5 gap-1">
           {NAV_ITEMS.map((item) => {
-            const isActive = item.path === "/"
-              ? location.pathname === "/" || location.pathname === "/timer"
-              : location.pathname === item.path ||
-                location.pathname.startsWith(`${item.path}/`);
+            const isActive =
+              item.path === "/"
+                ? location.pathname === "/" || location.pathname === "/timer"
+                : location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
 
             return (
               <button
@@ -38,16 +39,10 @@ export default function BottomNav() {
                   }`}
                 >
                   <item.icon
-                    className={`h-4 w-4 ${item.color} ${
-                      isActive ? "stroke-[2.5]" : "stroke-[2]"
-                    }`}
+                    className={`h-4 w-4 ${item.color} ${isActive ? "stroke-[2.5]" : "stroke-[2]"}`}
                   />
                 </span>
-                <span
-                  className={`text-xs ${
-                    isActive ? "font-semibold text-gray-900" : "text-gray-500"
-                  }`}
-                >
+                <span className={`text-xs ${isActive ? "font-semibold text-gray-900" : "text-gray-500"}`}>
                   {item.label}
                 </span>
               </button>

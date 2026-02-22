@@ -13,6 +13,29 @@ function formatTime(seconds: number) {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+function getBeijingNow() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || "";
+  const date = `${get("year")}-${get("month")}-${get("day")}`;
+  const time = `${get("hour")}:${get("minute")}:${get("second")}`;
+
+  return {
+    date,
+    beijingTime: `${date} ${time}`,
+    beijingTimestamp: Date.now(),
+  };
+}
+
 export default function TimerPage() {
   const navigate = useNavigate();
   const { currentSession, startSession, endSession, addRecord } = usePoopStore();
@@ -27,7 +50,10 @@ export default function TimerPage() {
   const [mood, setMood] = useState("relaxed");
   const [note, setNote] = useState("");
   const [savedRecord, setSavedRecord] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
   const [isHidden, setIsHidden] = useState(document.hidden);
+  const [isMobile, setIsMobile] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval>>();
 
@@ -55,6 +81,12 @@ export default function TimerPage() {
   }, []);
 
   useEffect(() => {
+    if (typeof navigator === "undefined") return;
+    const mobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+    setIsMobile(mobileUA);
+  }, []);
+
+  useEffect(() => {
     if (phase === "timing" && currentSession.isActive) {
       timerRef.current = setInterval(() => {
         const start = currentSession.startTime || Date.now();
@@ -68,10 +100,11 @@ export default function TimerPage() {
   }, [phase, currentSession.isActive, currentSession.startTime]);
 
   useEffect(() => {
-    if (phase === "timing" && currentSession.isActive && isHidden) {
+    const shouldNotify = isMobile || isHidden;
+    if (phase === "timing" && currentSession.isActive && shouldNotify) {
       postTimerNotification(elapsed);
     }
-  }, [phase, currentSession.isActive, elapsed, isHidden, postTimerNotification]);
+  }, [phase, currentSession.isActive, elapsed, isHidden, isMobile, postTimerNotification]);
 
   useEffect(() => {
     const onVisibilityChange = () => {
@@ -79,14 +112,14 @@ export default function TimerPage() {
       setIsHidden(hidden);
       if (hidden && phase === "timing" && currentSession.isActive) {
         postTimerNotification(elapsed);
-      } else {
+      } else if (!isMobile) {
         hideTimerNotification();
       }
     };
 
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => document.removeEventListener("visibilitychange", onVisibilityChange);
-  }, [phase, currentSession.isActive, elapsed, postTimerNotification, hideTimerNotification]);
+  }, [phase, currentSession.isActive, elapsed, postTimerNotification, hideTimerNotification, isMobile]);
 
   const handleStart = async () => {
     if ("Notification" in window && Notification.permission === "default") {
@@ -99,10 +132,7 @@ export default function TimerPage() {
 
     startSession();
     setElapsed(0);
-
-    if (document.hidden) {
-      await postTimerNotification(0);
-    }
+    if (isMobile || document.hidden) await postTimerNotification(0);
   };
 
   const handleFinish = async () => {
@@ -113,8 +143,11 @@ export default function TimerPage() {
     await clearTimerNotification();
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    setSaving(true);
+    setErrorMsg("");
     const now = new Date();
+    const beijingNow = getBeijingNow();
     const selectedLocation =
       location === "__custom__"
         ? customLocation.trim() || "自定义地点"
@@ -125,18 +158,26 @@ export default function TimerPage() {
       id: `poop-${Date.now()}`,
       startTime: now.getTime() - duration * 1000,
       endTime: now.getTime(),
+      beijingTimestamp: beijingNow.beijingTimestamp,
+      beijingTime: beijingNow.beijingTime,
       duration,
       hardness,
       smoothness,
       location: selectedLocation,
       mood,
       note,
-      date: now.toISOString().split("T")[0],
+      date: beijingNow.date,
     };
 
-    addRecord(record);
-    setSavedRecord(record);
-    setPhase("result");
+    try {
+      await addRecord(record);
+      setSavedRecord(record);
+      setPhase("result");
+    } catch (error) {
+      setErrorMsg(`保存失败：${error instanceof Error ? error.message : "未知错误"}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleBack = async () => {
@@ -189,7 +230,7 @@ export default function TimerPage() {
 
             <p className="text-amber-600 text-sm text-center mb-8">
               {currentSession.isActive
-                ? "最小化后支持在通知栏显示计时状态（浏览器支持时）"
+                ? "手机端会在通知栏显示并更新计时（需授权通知）"
                 : "点击开始后进入计时，你可以稍后再结束并填写详情"}
             </p>
 
@@ -354,10 +395,12 @@ export default function TimerPage() {
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={handleSave}
+              disabled={saving}
               className="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-2xl font-bold text-lg shadow-lg shadow-amber-300/40 flex items-center justify-center gap-2"
             >
-              <Check className="w-5 h-5" /> 保存记录
+              <Check className="w-5 h-5" /> {saving ? "保存中..." : "保存记录"}
             </motion.button>
+            {errorMsg && <p className="text-sm text-center text-red-500">{errorMsg}</p>}
           </motion.div>
         )}
 

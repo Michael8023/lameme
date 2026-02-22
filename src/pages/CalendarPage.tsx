@@ -81,7 +81,7 @@ export default function CalendarPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-50 to-teal-50">
+    <div className="min-h-screen bg-gradient-to-b from-amber-50 via-orange-50 to-yellow-50">
       <header className="flex items-center px-4 pt-safe pt-6 pb-3">
         <button
           onClick={() => navigate("/")}
