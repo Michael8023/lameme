@@ -1,9 +1,20 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { getFunctionsBaseUrl, supabase } from "../lib/supabase";
 
 type Mode = "login" | "register";
+
+function sanitizeHeaderValue(raw: string | undefined) {
+  return (raw ?? "")
+    .trim()
+    .replace(/^['"]+|['"]+$/g, "")
+    .replace(/[\r\n\t]/g, "");
+}
+
+function isValidHeaderByteString(value: string) {
+  return value.length > 0 && /^[\x20-\x7E\x80-\xFF]+$/.test(value);
+}
 
 export default function AuthPage() {
   const navigate = useNavigate();
@@ -18,15 +29,18 @@ export default function AuthPage() {
   const handleLogin = async () => {
     setLoading(true);
     setMessage("");
+
     const { error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
+
     setLoading(false);
     if (error) {
       setMessage(`登录失败：${error.message}`);
       return;
     }
+
     navigate("/");
   };
 
@@ -35,32 +49,48 @@ export default function AuthPage() {
     setMessage("");
 
     const base = getFunctionsBaseUrl();
-    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+    const anonKeyRaw = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+    const anonKey = sanitizeHeaderValue(anonKeyRaw);
+
     if (!base) {
       setLoading(false);
       setMessage("缺少 Supabase 环境变量，请配置 VITE_SUPABASE_URL。");
       return;
     }
+
     if (!anonKey) {
       setLoading(false);
       setMessage("缺少 Supabase 环境变量，请配置 VITE_SUPABASE_ANON_KEY。");
       return;
     }
 
-    const resp = await fetch(`${base}/beta-signup`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: anonKey,
-        Authorization: `Bearer ${anonKey}`,
-      },
-      body: JSON.stringify({
-        email: email.trim(),
-        password,
-        nickname: nickname.trim(),
-        inviteCode: inviteCode.trim(),
-      }),
-    });
+    if (!isValidHeaderByteString(anonKey)) {
+      setLoading(false);
+      setMessage("VITE_SUPABASE_ANON_KEY 格式无效，请去掉引号、换行或特殊字符。");
+      return;
+    }
+
+    let resp: Response;
+    try {
+      resp = await fetch(`${base}/beta-signup`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: anonKey,
+          Authorization: `Bearer ${anonKey}`,
+        },
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+          nickname: nickname.trim(),
+          inviteCode: inviteCode.trim(),
+        }),
+      });
+    } catch (error) {
+      setLoading(false);
+      setMessage(`注册失败：${error instanceof Error ? error.message : "网络错误"}`);
+      return;
+    }
 
     const json = await resp.json().catch(() => ({}));
     if (!resp.ok) {
@@ -87,8 +117,12 @@ export default function AuthPage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
-    if (mode === "login") await handleLogin();
-    else await handleRegister();
+
+    if (mode === "login") {
+      await handleLogin();
+    } else {
+      await handleRegister();
+    }
   };
 
   return (
@@ -168,9 +202,7 @@ export default function AuthPage() {
           </button>
         </form>
 
-        {message && (
-          <p className="text-sm text-center text-red-500">{message}</p>
-        )}
+        {message && <p className="text-sm text-center text-red-500">{message}</p>}
       </motion.div>
     </div>
   );
