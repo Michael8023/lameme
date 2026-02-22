@@ -281,8 +281,19 @@ export default function MyPage() {
         throw new Error("昵称不匹配，已取消注销");
       }
 
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        throw new Error("登录已过期，请重新登录后再注销账号");
+      }
+
       const { error } = await supabase.functions.invoke("delete-account", {
         body: { confirmNickname: input },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
       });
 
       if (error) {
