@@ -12,7 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { HARDNESS_MAP } from "../types";
-import { supabase } from "../lib/supabase";
+import { getFunctionsBaseUrl, supabase } from "../lib/supabase";
 import { usePoopStore } from "../store";
 import type { PoopRecord } from "../types";
 
@@ -26,6 +26,13 @@ type Medal = {
 
 const CHART_WIDTH = 320;
 const CHART_HEIGHT = 140;
+
+function sanitizeHeaderValue(raw: string | undefined) {
+  return (raw ?? "")
+    .trim()
+    .replace(/^['"]+|['"]+$/g, "")
+    .replace(/[\r\n\t]/g, "");
+}
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -282,22 +289,46 @@ export default function MyPage() {
       }
 
       const {
-        data: { session },
+        data: { session: currentSession },
       } = await supabase.auth.getSession();
-      const accessToken = session?.access_token;
+
+      let accessToken = currentSession?.access_token ?? "";
+      if (!accessToken) {
+        const {
+          data: { session: refreshedSession },
+        } = await supabase.auth.refreshSession();
+        accessToken = refreshedSession?.access_token ?? "";
+      }
+
       if (!accessToken) {
         throw new Error("登录已过期，请重新登录后再注销账号");
       }
 
-      const { error } = await supabase.functions.invoke("delete-account", {
-        body: { confirmNickname: input },
+      const { data: userData, error: userErr } = await supabase.auth.getUser(accessToken);
+      if (userErr || !userData.user) {
+        throw new Error("登录凭证无效，请重新登录后再注销账号");
+      }
+
+      const base = getFunctionsBaseUrl();
+      const anonKey = sanitizeHeaderValue(import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined);
+      if (!base || !anonKey) {
+        throw new Error("缺少环境变量，请检查 VITE_SUPABASE_URL 与 VITE_SUPABASE_ANON_KEY");
+      }
+
+      const resp = await fetch(`${base}/delete-account`, {
+        method: "POST",
         headers: {
+          "Content-Type": "application/json",
+          apikey: anonKey,
           Authorization: `Bearer ${accessToken}`,
         },
+        body: JSON.stringify({ confirmNickname: input }),
       });
 
-      if (error) {
-        throw new Error(error.message || "注销失败");
+      const result = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        const reason = result?.message || result?.code || `HTTP ${resp.status}`;
+        throw new Error(String(reason));
       }
 
       await supabase.auth.signOut();
